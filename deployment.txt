@@ -1,0 +1,126 @@
+1 将脚本文件crm_sh_mod.R和安装文件R.tar拷入
+2 root用户下将R.tar解压到/usr目录
+3 切换到hdfs用户，配置环境变量：
+执行 vi ~/.bash_profile 
+增加以下内容
+export PATH=$PATH:/usr/R/bin:/usr/java/jdk1.8.0_77/bin（根据java路径适当调整）
+export SPARK_HOME=/usr/hdp/2.6.3.0-235/spark2（根据spark的安装路径适当调整）
+执行 source ~/.bash_profile 
+4 以hdfs用户验证R是否安装成功
+
+--------------------------------------------------------------------------------
+# Make deployment directory 
+[root@hadoop2 ~]# ssh hadoop7
+[root@hadoop7 ~]# cd /app
+[root@hadoop7 app]# mkdir spark
+[root@hadoop7 app]# chown -R hdfs:hadoop spark
+# repeat for hadoop7-9
+
+# Scopy installation packages 
+[root@crm021 usr]# tar -cvf R.tar R
+[root@hadoop2 spark]# ll 
+total 79460
+-rwxr-xr-x 1 spark hadoop    18979 Sep 23 11:33 crm_sh_mod.R
+-rw-r--r-- 1 spark hadoop  1052728 Sep 23 10:59 jsonlite_1.6.tar.gz
+-rw-r--r-- 1 spark hadoop   587943 Sep 23 10:59 Rserve_1.7-3.1.tar.gz
+-rw-r--r-- 1 spark hadoop 79697920 Sep 23 10:55 R.tar
+[root@hadoop2 spark]# scp * hdfs@hadoop7:/app/spark
+[root@hadoop2 spark]# ssh hadoop7
+[root@hadoop2 spark]# chown  hdfs:hadoop crm_sh_mod.R 
+
+
+# Install R at root 
+[root@hadoop9 spark]# tar -xpvf R.tar 
+[root@hadoop9 spark]# mv R /usr
+
+# Config environment at hdfs 
+[hdfs@crm021 hdfs]$ vi ~/.bash_profile 
+# Add by hanbing at 2019-08-19
+export PATH=$PATH:/usr/R/bin
+export SPARK_HOME=/usr/hdp/2.6.3.0-235/spark2
+[hdfs@crm021 hdfs]$ source ~/.bash_profile 
+
+# Install Rserve at hdfs 
+[hdfs@crm021 hdfs]# R CMD INSTALL --no-lock Rserve_1.7-3.1.tar.gz 
+[hdfs@crm021 hdfs]# R CMD Rserve --help
+[hdfs@crm021 hdfs]# R CMD Rserve --RS-settings
+
+# Start Rserve at hdfs 
+[hdfs@crm021 hdfs]# R CMD Rserve --RS-enable-remote
+[hdfs@crm021 hdfs]# netstat -ntlp | grep Rserve
+[hdfs@crm021 hdfs]# ps -aux |grep Rserve
+[hdfs@crm021 hdfs]# killall -s9 Rserve # Or kill -pid 5542
+
+# Install jsonlite at hdfs 
+[hdfs@crm021 spark]# R CMD INSTALL --no-lock jsonlite_1.6.tar.gz
+[hdfs@crm021 spark]# ll /usr/R/lib64/R/library 
+
+
+# ------------------------------------
+# exchange_to_hdfs 
+[root@hadoop7 ~]# chown -R hdfs:hadoop /usr/R
+[root@hadoop7 ~]# chown -R hdfs:hadoop /app/spark
+[root@hadoop7 ~]# vi /home/hdfs/.bash_profile 
+# Add by hanbing at 2019-08-19
+export PATH=$PATH:/usr/R/bin
+export SPARK_HOME=/usr/hdp/2.6.3.0-235/spark2
+[root@hadoop7 ~]# source /home/hdfs/.bash_profile 
+[root@hadoop7 ~]# ps -ef | grep Rs
+[root@hadoop7 ~]# kill Rs-pid
+[root@hadoop7 ~]# su - hdfs 
+[hdfs@hadoop7 ~]$ R CMD Rserve --RS-enable-remote
+
+
+# ------------------------------------
+# Update SparkR version in all nodes
+[root@crm020 lib]# ssh crm021
+[root@crm021 ~]# mv $SPARK_HOME/R/lib/SparkR $SPARK_HOME/R/lib/SparkR_2.2.0
+[root@crm020 ~]# exit
+[root@crm020 lib]# scp -r $SPARK_HOME/R/lib/SparkR root@crm021:$SPARK_HOME/R/lib
+# repeat
+# ------------------------------------
+# thrift and rhbase installation at root 
+[root@crm020 spark]# R CMD INSTALL rhbase_1.2.0.tar.gz 
+* installing to library ?.usr/R/lib64/R/library?
+* installing *source* package ?.hbase?....
+** libs
+g++ -I/usr/R/lib64/R/include -DNDEBUG  -I/usr/local/include   -I. -g  -DHAVE_UINTPTR_T -DHAVE_NETDB_H=1 -fpermissive -DHAVE_INTTYPES_H -DHAVE_NETINET_IN_H -I./gen_cpp `pkg-config --cflags thrift` -Wall -fpic  -g -O2  -c Hbase.cpp -o Hbase.o
+Package thrift was not found in the pkg-config search path.
+Perhaps you should add the directory containing `thrift.pc'
+to the PKG_CONFIG_PATH environment variable
+No package 'thrift' found
+In file included from Hbase.cpp:7:0:
+Hbase.h:10:24: fatal error: TProcessor.h: No such file or directory
+ #include <TProcessor.h>
+                        ^
+compilation terminated.
+make: *** [Hbase.o] Error 1
+ERROR: compilation failed for package ?.hbase?
+* removing ?.usr/R/lib64/R/library/rhbase?
+[root@crm020 spark]# pkg-config --cflags thrift
+Package thrift was not found in the pkg-config search path.
+Perhaps you should add the directory containing `thrift.pc'
+to the PKG_CONFIG_PATH environment variable
+No package 'thrift' found
+[root@crm020 spark]# find / -name "*thrift.pc*"
+/home/spark/thrift-0.9.0/lib/cpp/thrift.pc.in
+/home/spark/thrift-0.9.0/lib/cpp/thrift.pc
+find: ?.run/user/42/gvfs?. Permission denied
+/usr/local/lib/pkgconfig/thrift.pc
+[root@crm020 spark]# cp /usr/local/lib/pkgconfig/thrift.pc /usr/lib64/pkgconfig/
+[root@crm020 spark]# pkg-config --cflags thrift
+-I/usr/local/include/thrift
+[root@crm020 spark]# R CMD INSTALL rhbase_1.2.0.tar.gz 
+Error in dyn.load(file, DLLpath = DLLpath, ...) : 
+  unable to load shared object '/usr/R/lib64/R/library/rhbase/libs/rhbase.so':
+  libthrift-0.9.0.so: cannot open shared object file: No such file or directory
+[root@crm020 spark]# cp /usr/local/lib/libthrift-0.9.0.so /usr/lib64/
+installing to /usr/R/lib64/R/library/rhbase/libs
+* DONE (rhbase)
+
+
+ 
+ 
+ 
+ 
+ 
