@@ -41,3 +41,6 @@ Second, using the lightweight front end provided by the SparkR distributed compu
 Third, use Rserve component service technology to realize the remote call of interactive side to R language server. With the feature that Rserve uses C/S (client/server) mode to call, the interactive side does not need to connect to the R language library, and the purpose of low coupling between the interactive side Java program and the background R program can be realized.
 
 At present, this tool has been well applied in large commercial banks.
+
+## Patent Information
+SanShan Sun, Bing Han, et al., *“Data modeling methods, devices, storage media, and processors”*, Invention patent, CN112988119A, publicly available.
